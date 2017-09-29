@@ -39,6 +39,8 @@ To use this package:
       a 1 year time step for the first simulation period, and a 50 year period for the second simulation period,
       you'd say, `time_steps = c(50, 1, 50)`. 50 years is a good time step when you're simulating millions of years,
       but if you're simulating a short period with rapid changes, you might want to use a shorter time-step.
+* To read in the results of the GEOCARB run, you use the function `read_geocarb` to read in the file you specified when
+  you ran the model with `run_geocarb`.
 
 ```
 source("new_geocarb.R")
@@ -65,5 +67,5 @@ run_geocarb("geocarb_test_run.csv", # file to save the results in.
              start_recording = -2E6)  # Start recording data when
                                       # the spinup gets to -2 million years.
 
-gc = load_geocarb("geocarb_test_run.csv")
+gc = read_geocarb("geocarb_test_run.csv")
 ```
