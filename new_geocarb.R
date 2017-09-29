@@ -61,17 +61,17 @@ load_geocarb = function(python_script = "geocarb_varco2") {
 }
 
 run_geocarb = function(filename, 
-                       co2_spike = c(0, 0, 0),
+                       co2_spike = 0,
                        co2_emissions = list(
                          0,
-                         c(0:100 * 10),
+                         seq(1, 100, 1), # Go from 1 to 100 GT in steps of 1.
                          0
                        ),
-                       time_steps = c(50, 1, 50),
                        periods = c(5E6, 100, 2E6),
-                       degas = c(7.5, 7.5, 7.5),
-                       plants = c(TRUE, TRUE, TRUE),
-                       land_area = c(1, 1, 1),
+                       time_steps = c(50, 1, 50),
+                       degas = 7.5,
+                       plants = TRUE,
+                       land_area = 1,
                        delta_t2x = 3.0,
                        million_years_ago = 0,
                        mean_latitude_continents = 30,

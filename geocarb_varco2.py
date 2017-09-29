@@ -8,6 +8,9 @@
 # I have not added anything original. Merely translated it from FORTRAN to Python,
 # cleaned it up a little, and started adding detailed comments to explain how it works.
 #
+# I also noted what seem to be typos in the temperature dependence of the weathering
+# feedback in lines 106-115 of Archer's code (calculating f_bt_co2).
+#
 # Jonathan Gilligan <jonthan.gilligan@vanderbilt.edu>
 #
 #
@@ -17,7 +20,7 @@ import string, time
 import pandas
 
 trace = False
-trace_interval = 100
+trace_interval = 100000
 
 # Definition of GEOG (Berner 2004, pp. 35-36; Berner & Kothavala 2001, pp. 184, 193)
 #
@@ -71,7 +74,7 @@ def newt(alk, tco2, sal, temp, k1, k2):
     # See also, Millero 1995, eq. 53
     tbor = 4.106E-4 * sal / 35.
     # Kelvin temp
-    tkt = temp + 273
+    tkt = temp + 273.
     # Kelvin temp / 100
     tk = tkt / 100.
 
@@ -256,7 +259,7 @@ def calc_co2(conc, temp):
 # GEOL_YEAR = year before present (used to set solar constant
 # MEAN_LATITUDE = mean latitude of continents. Used to determine runoff parameters from mean solar zenith
 # DT2X = climate sensitivity (celsius warming for doubled CO2)
-# F_PLANTS = fraction of vascular plants (relative to today)
+# B_PLANTS = presence vascular plants
 # F_LAND = fraction of land (relative to today)
 # TIMESTEP = years per timestep.
 #
@@ -267,9 +270,9 @@ def calc_co2(conc, temp):
 def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
             timestep = (50.,1., 50.),
             duration = (5E6, 100, 2E6),
-            dt2x  = 3.0, 
-            geol_year = 0.0, mean_latitude = 3.0, 
-            b_plants = True, f_land = 1, 
+            dt2x  = 3.0,
+            geol_year = 0.0, mean_latitude = 3.0,
+            b_plants = True, f_land = 1,
             lead_in = 0,
             co2_ts = None):
     global trace
@@ -293,7 +296,7 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
         b_plants = [bool(b_plants)] * np
     if type(f_land) in (int, float):
         f_land = [f_land] * np
-    
+
     # Slug of CO2 released at the end of a period. For the default 2-period run, co2_slug = (x,0),
     # where x is the CO2 release in gigatons.
     #
@@ -308,7 +311,7 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
         if type(co2_ts[i]) in (int, float):
             co2_ts[i] = [co2_ts[i]] * n_steps[i]
     co2_ts = list(map(lambda x : numpy.array(x) * 1E+3/12., co2_ts)) # Convert GTon C to 10^12 moles
-    
+
 
     # Carbonate weathering constant, from Berner 1991 (GEOCARB I), p. 344
     weat_carb_k = 0.00261 * 3000
@@ -327,7 +330,7 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
     # solar_response = solar response factor Ws from Berner 2004 (p. 31)
     # and Berner & Kothavala 2001 (p. 184, Eq. 3 and pp. 191-92)
     #
-    solar_response = -7.
+    solar_response = -7.4
     #
     # river runoff parameter: transport of dissolved weathering products to ocean
     # Berner + Kothavala 2001, p. 184, Eq. 2 and pp. 191-92.
@@ -351,6 +354,12 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
     # original: tau = dt2x, but I think it should be this:
     tau = dt2x / math.log(2)
     z = 0.09
+    #
+    # CO2 fertilization effect on vascular plants: B&K, Eq. 5,
+    # and the discussion on pp. 188-90. See also, Berner 1994
+    # Eq. 34-37
+    #
+    fert = 0.4
 
     # run_steps = int(run_time / timestep)
     # leadin_index = spinup_steps - int(1000 / timestep)
@@ -394,7 +403,7 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
             ocn_tco2_bot = ocn_conc[i_tc]
 
     year = timestep[0] - duration[0]
-    data_names = ("year", "tco2", "pCO2", "alk", "CO3", "WeatC", "WeatS", 
+    data_names = ("year", "tco2", "pCO2", "alk", "CO3", "WeatC", "WeatS",
                   "TotW", "BurC", "Degas", "Emiss", "Tatm", "Tocn")
     data_cols = len(data_names)
     data = numpy.zeros((data_length, data_cols),numpy.double)
@@ -418,7 +427,7 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
           nsteps += 1
           co2_series = numpy.insert(co2_series, 0, co2_series[0])
           data = numpy.append(data, numpy.zeros((1,data_cols)), 0)
-        print("nsteps = ", nsteps, ", len(series) = ", len(co2_series), 
+        print("nsteps = ", nsteps, ", len(series) = ", len(co2_series),
               ", last_year = ", last_year, ", step = ", time_step, ", dt =", dt)
         for itime in range(nsteps):
             year = last_year + dt + itime * time_step
@@ -443,10 +452,10 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
             # Eq(5): f_co2(co2) = (2 r_co2 / (1 + r_co2))^fert for weathering affected
             #                                                   by vascular plants
             #
-            #delta_t = co2_doublings * dt2x + geog - solar_response * (geol_year / 570)
+            delta_t = co2_doublings * dt2x + geog + solar_response * (gyear / 570.)
             #
             # Original version:
-            delta_t = math.log(r_co2)*tau + solar_response * (gyear / 579) + geog
+            # delta_t = r_co2**tau + solar_response(geol_year / 579) + geog
             #
             #
             # Basic weathering: CO2 thermostat. Berner 1994 Eq. 33,
@@ -456,10 +465,27 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
             #
             f_bt_co2 = math.exp(delta_t *z) * (1 + run  * delta_t )**0.65
             #
+            #
+            # Here we calculate f_co2(co2).
+            # Archer's version is:
+            #    with plants, f_co2(co2) = 1
+            #    without plants, f_co2(co2) = 0.8
             # Vascular plants accelerate weathering
             #
-            if not has_plants:
-                f_bt_co2 *= 0.8
+            # Berner and Kothavala have carbon dioxide fertilization effect for vascular plants
+            # See B&K 2001 Eq. 4,5 and the discussion on pp. 188-90.
+            # See also, Berner 1994 Eq. 34-37
+            #
+            if True:
+                # Archer's version.
+                if not has_plants:
+                  f_bt_co2 *= 0.8
+            else:
+                # Berner and Kothavala version
+                if not has_plants:
+                    f_bt_co2 *= math.sqrt(r_co2)
+                else:
+                    f_bt_co2 *= (2 * r_co2 / (1. + r_co2))**fert
             #
             # Carbonate and silicate weathering
             #
@@ -469,43 +495,62 @@ def geocarb(co2_slug = (0, 1000, 0), co2_degas = 7.5,
 #   GAS EXCHANGE
 #
             pco2_sat, co3 = calc_co2(ocn_conc, atm_temp)
+            #
+            # Gas exchange: atmosphere saturates with
+            # CO2 relative to dissolved vapor pressure.
+            #
             ge = GEpPPM * (pco2_sat - pco2) # + up
 #
 #   CaCO3 precipitation/burial
 #
-            bc = 3E-3 * (co3-150.) * 1E3/12. # Archer 1997: 150 is offset between ocn mean and deep. Units: 10^12 mole/year.
+            bc = 3E-3 * (co3-150.) * 1E3/12. # Archer 1997 and Archer et al., 2009: 150 is offset between ocn mean and deep. Units: 10^12 mole/year.
 
+            # Direct air-temperature dependence of carbonate burial
             f_caco3_t = 0.0
             if f_caco3_t > 0:
                 bc *= math.exp((atm_temp - atm_temp_0) * f_caco3_t)
 
+#
+#   Convert ocean and atmospheric concentrations to inventories.
+#
             for i_s in range(2):
                 ocn_inv[i_s] = ocn_conc[i_s] * ocn_vol # moles
             atm_inv = pco2 * MOLpPPM # atmospheric inventory (10^12 moles)
 
+#
+#   Adjust inventories by burial, weathering, and gas-exchange fluxes.
+#   Atmosphere-ocean exchange is constrained by conservation of matter,
+#   but exhanges with solid earth are not because there's no solid carbon inventory.
+#
             ocn_inv[i_alk] += ( weat_carb + weat_sil - bc) * 2.0 * delta_time # ocean inventory of alkalinity (10^12 moles)
             ocn_inv[i_tc] +=  ( weat_carb + weat_sil - bc - ge ) * delta_time # ocean inventory of total carbon (10^12 moles)
             atm_inv += (ge + degas + co2_emissions - weat_sil) * delta_time       # atmospheric inventory of CO2 (10^12 moles)
 
+#
+#   Now that we've adjusted the inventories, we need to update the concentrations to match.
+#
+
             for i_s in range(2):
                 ocn_conc[i_s] = ocn_inv[i_s] / ocn_vol # ocean concentrations of alkalinity and total carbon in moles per cubic meter
             pco2 = atm_inv / MOLpPPM #atmospheric concentration of CO2, ppm.
-
+#
+#   Finally. We're done with the time step and we can record the data.
+#
             if data_index >= leadin_index:
                 # "year", "tco2", "pCO2", "alk", "CO3", "WeatC", "WeatS", "TotW", "BurC", "Degas", "Emiss", "Tatm", "Tocn")
 
                 data[data_index - leadin_index,:] = (year, ocn_conc[i_tc],
-                    pco2, ocn_conc[i_alk], co3, weat_carb, weat_sil, weat_carb + weat_sil, 
+                    pco2, ocn_conc[i_alk], co3, weat_carb, weat_sil, weat_carb + weat_sil,
                     bc, degas, co2_emissions * 12/1.E+3, atm_temp, ocn_temp)
             if trace:
                 if ((period > 0) or (itime > 0)) and (int(year) % trace_interval == 0):
-                    print("Period ", period, " Step ", itime, " Year ", year)
+                    print ("Period %2d, Step %5d, Year %8d" % (period, itime, year))
 
             data_index += 1
             delta_time = time_step
         #
-        # We've reached the end of a period. Do we dump a big slug of CO2 into the atmosphere
-        # at the transition to the next period?
+        # We've reached the end of a period.
+        # Do we dump a big slug of CO2 into the atmosphere at the transition to the next period?
         #
         atm_inv += co2_slug[period]
         pco2 = atm_inv/MOLpPPM
@@ -520,6 +565,7 @@ def save(df, filename):
 #
 #
 # Archer, D., Kheshgi, H., and Maier-Reimer, E., 1997, "Multiple timescales for neutralization of fossil fuel CO2" GRL 24, 405-08.
+# Archer, D., et al., 2009, "Atmospheric Lifetime of Fossil Fuel Carbon Dioxide" Annu. Rev. Earth Planet. Sci. 37, 117-34.
 # Berner, R.A., 1991, "A Model for amospheric CO2 over Phanerozoic time" Am. J. Sci. 291, 339-76.
 # Berner, R.A., 1994, "GEOCARB II: A revised model of atmospheric CO2 over Phanerozoic time" Am. J. Sci. 294, 56-91.
 # Berner, R.A., 2001, "GEOCARB III: A revised model of atmospheric CO2 over Phanerozoic time" Am. J. Sci. 301, 182-204.
@@ -546,4 +592,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
