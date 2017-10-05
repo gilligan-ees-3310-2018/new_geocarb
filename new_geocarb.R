@@ -6,6 +6,8 @@ p_load(scales)
 p_load(xml2)
 p_load(reticulate)
 
+use_condaenv("python3")
+
 column_names = c(
   year = "year",
   tco2 = "co2.total",
@@ -54,13 +56,13 @@ columns = tibble(
 
 load_geocarb = function(python_script = "geocarb_varco2") {
   path = dirname(python_script)
-  module = basename(python_script) %>% str_split("\\.", n = 2) %>% 
+  module = basename(python_script) %>% str_split("\\.", n = 2) %>%
     simplify() %>% head(1)
   geocarb_module <- import_from_path(module, path)
   assign("geocarb_module", geocarb_module, envir = globalenv())
 }
 
-run_geocarb = function(filename, 
+run_geocarb = function(filename,
                        co2_spike = 0,
                        co2_emissions = list(
                          0,
@@ -78,15 +80,15 @@ run_geocarb = function(filename,
                        start_recording = -2E6) {
   if (! exists("geocarb_module", envir = globalenv()))
     load_geocarb()
-  
-  gc <- geocarb_module$geocarb(co2_spike, degas, 
+
+  gc <- geocarb_module$geocarb(co2_spike, degas,
                                time_steps, periods,
-                               delta_t2x, 
+                               delta_t2x,
                                million_years_ago, mean_latitude_continents,
                                plants, land_area,
                                (periods[1] + start_recording - time_steps[1]),
                                co2_emissions)
-  
+
   geocarb_module$save(gc, filename)
 }
 
