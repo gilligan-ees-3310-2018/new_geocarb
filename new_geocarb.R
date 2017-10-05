@@ -6,7 +6,14 @@ p_load(scales)
 p_load(xml2)
 p_load(reticulate)
 
-use_condaenv("python3")
+
+if (! 'geocarb' %in% conda_list()$name) {
+  conda_create("geocarb", packages = c("python", "numpy", "pandas"))
+}
+
+use_condaenv("geocarb")
+
+py_geocarb_path = file.path(getwd(), 'geocarb_varco2')
 
 column_names = c(
   year = "year",
@@ -54,7 +61,7 @@ columns = tibble(
   )
 
 
-load_geocarb = function(python_script = "geocarb_varco2") {
+load_geocarb = function(python_script = py_geocarb_path) {
   path = dirname(python_script)
   module = basename(python_script) %>% str_split("\\.", n = 2) %>%
     simplify() %>% head(1)
